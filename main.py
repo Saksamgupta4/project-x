@@ -252,7 +252,6 @@ def simulator_thread(custom_schedule=None, single_email=None):
     asyncio.run(queue_worker(custom_schedule=custom_schedule, single_email=single_email))
 
 if __name__ == "__main__":
-    global state
     ACCS  = get_accounts()
     state = StateManager(ACCS, COURSES)
 
