@@ -1,0 +1,42 @@
+{
+  "lms": {
+    "url": "https://inco.docebosaas.com",
+    "learning_plan_id": 41,
+    "learning_plan_slug": "green-pathways"
+  },
+  "courses": [
+    {"id": 290, "name": "Module 1: Foundations of sustainability", "lessons": 6, "required": true, "slug": "module-1-foundations-of-sustainability"},
+    {"id": 291, "name": "Module 2: Energy Transition", "lessons": 6, "required": true, "slug": "module-2-energy-transition"},
+    {"id": 292, "name": "Module 3: Career Pathways", "lessons": 5, "required": true, "slug": "module-3-career-pathways"},
+    {"id": 293, "name": "Module 4: Professional Skills", "lessons": 5, "required": false, "slug": "module-4-professional-skills"}
+  ],
+  "simulation": {
+    "min_minutes_per_lesson": 10,
+    "max_minutes_per_lesson": 20,
+    "days_between_modules_min": 4,
+    "days_between_modules_max": 4
+  },
+  "test_mode": {
+    "enabled": false,
+    "speed_multiplier": 3600
+  },
+  "proxy": {
+    "type": "socks5",
+    "port": 1080,
+    "username": "",
+    "password": "",
+    "servers": {
+      "in": "in.socks.nordhold.net",
+      "ae": "ae.socks.nordhold.net",
+      "gb": "gb.socks.nordhold.net",
+      "us": "us.socks.nordhold.net",
+      "de": "de.socks.nordhold.net",
+      "fr": "fr.socks.nordhold.net",
+      "sg": "sg.socks.nordhold.net",
+      "au": "au.socks.nordhold.net",
+      "ca": "ca.socks.nordhold.net",
+      "nl": "nl.socks.nordhold.net"
+    }
+  },
+  "accounts": []
+}
