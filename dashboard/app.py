@@ -96,11 +96,12 @@ def add_account():
     password = data.get("password", "")
     proxy    = data.get("proxy_country", "in")
     name     = data.get("name", email.split("@")[0])
-    modules  = data.get("modules", [])
+    modules     = data.get("modules", [])
+    instance_id = data.get("instance_id", INSTANCE_ID)  # Allow specifying batch
     if not email or not password:
         return jsonify({"ok": False, "error": "Email and password required"})
     if _db and _db.enabled:
-        ok = _db.add_account(email, password, proxy, name, modules, instance_id=INSTANCE_ID)
+        ok = _db.add_account(email, password, proxy, name, modules, instance_id=instance_id)
         if ok:
             cfg = _load_config()
             _db.init_progress(email, cfg["courses"])

@@ -261,6 +261,16 @@ bob@outlook.com,mypass789"></textarea>
                 <option value="ca">Canada</option><option value="nl">Netherlands</option>
               </select>
             </div>
+            <div><label class="flbl">Assign to Batch</label>
+              <select class="fsel" id="bulk-batch">
+                <option value="batch1">Batch 1</option>
+                <option value="batch2">Batch 2</option>
+                <option value="batch3">Batch 3</option>
+                <option value="batch4">Batch 4</option>
+                <option value="batch5">Batch 5</option>
+                <option value="batch6">Batch 6</option>
+              </select>
+            </div>
           </div>
           <div id="bulk-preview" style="display:none;margin-bottom:10px">
             <label class="flbl">Preview</label>
@@ -578,7 +588,7 @@ function doBulkImport() {
     fetch("/api/accounts", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({email: acc.email, password: acc.password, name: acc.email.split("@")[0], proxy_country: proxy, modules: []})
+      body: JSON.stringify({email: acc.email, password: acc.password, name: acc.email.split("@")[0], proxy_country: proxy, modules: [], instance_id: batch})
     }).then(function(r) { return r.json(); }).then(function(d) {
       if (d.ok) ok++; else fail++;
       setTimeout(function() { importNext(i + 1); }, 200);
