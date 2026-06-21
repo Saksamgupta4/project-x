@@ -588,7 +588,7 @@ function doBulkImport() {
     fetch("/api/accounts", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({email: acc.email, password: acc.password, name: acc.email.split("@")[0], proxy_country: proxy, modules: [], instance_id: batch})
+      body: JSON.stringify({email: acc.email, password: acc.password, name: acc.email.split("@")[0], proxy_country: proxy, modules: [], instance_id: (document.getElementById("bulk-batch") ? document.getElementById("bulk-batch").value : "batch1")})
     }).then(function(r) { return r.json(); }).then(function(d) {
       if (d.ok) ok++; else fail++;
       setTimeout(function() { importNext(i + 1); }, 200);
