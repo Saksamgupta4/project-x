@@ -262,14 +262,24 @@ bob@outlook.com,mypass789"></textarea>
               </select>
             </div>
             <div><label class="flbl">Assign to Batch</label>
-              <select class="fsel" id="bulk-batch">
-                <option value="batch1">Batch 1</option>
-                <option value="batch2">Batch 2</option>
-                <option value="batch3">Batch 3</option>
-                <option value="batch4">Batch 4</option>
-                <option value="batch5">Batch 5</option>
-                <option value="batch6">Batch 6</option>
-              </select>
+              <div style="display:flex;gap:6px;align-items:center">
+                <select class="fsel" id="bulk-batch" style="flex:1">
+                  <option value="batch1">Batch 1</option>
+                  <option value="batch2">Batch 2</option>
+                  <option value="batch3">Batch 3</option>
+                  <option value="batch4">Batch 4</option>
+                  <option value="batch5">Batch 5</option>
+                  <option value="batch6">Batch 6</option>
+                  <option value="batch7">Batch 7</option>
+                  <option value="batch8">Batch 8</option>
+                  <option value="batch9">Batch 9</option>
+                  <option value="batch10">Batch 10</option>
+                </select>
+              </div>
+              <div style="margin-top:5px">
+                <label class="flbl">Custom batch (optional)</label>
+                <input class="fi" id="bulk-batch-custom" placeholder="e.g. batch11, batch12...">
+              </div>
             </div>
           </div>
           <div id="bulk-preview" style="display:none;margin-bottom:10px">
@@ -593,7 +603,7 @@ function doBulkImport() {
     fetch("/api/accounts", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({email: acc.email, password: acc.password, name: acc.email.split("@")[0], proxy_country: proxy, modules: [], instance_id: (document.getElementById("bulk-batch") ? document.getElementById("bulk-batch").value : "batch1")})
+      body: JSON.stringify({email: acc.email, password: acc.password, name: acc.email.split("@")[0], proxy_country: proxy, modules: [], instance_id: ((document.getElementById("bulk-batch-custom") && document.getElementById("bulk-batch-custom").value.trim()) || (document.getElementById("bulk-batch") ? document.getElementById("bulk-batch").value : "batch1"))})
     }).then(function(r) { return r.json(); }).then(function(d) {
       if (d.ok) ok++; else fail++;
       setTimeout(function() { importNext(i + 1); }, 200);
