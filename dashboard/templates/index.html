@@ -532,7 +532,12 @@ function parseBulk() {
     line = line.trim();
     if (!line) return null;
     var email, password;
-    if (line.indexOf(":") >= 0) {
+    if (line.indexOf("\t") >= 0) {
+      // Tab separated (from Excel)
+      var parts = line.split("\t");
+      email = parts[0];
+      password = parts[1];
+    } else if (line.indexOf(":") >= 0) {
       var parts = line.split(":");
       email = parts[0];
       password = parts.slice(1).join(":");
