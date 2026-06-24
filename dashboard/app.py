@@ -157,6 +157,8 @@ def control(action):
     if not _state:
         return jsonify({"error": "not ready"})
     if action == "start":
+        if _state.is_running():
+            return jsonify({"ok": False, "error": "Already running!"})
         _state.start()
         sched = _custom_sched if _custom_sched else None
         threading.Thread(target=_simulator, kwargs={"custom_schedule": sched}, daemon=True).start()

@@ -743,8 +743,12 @@ function clearLogs() {
 function ctrl(action) {
   fetch("/api/control/" + action, {method:"POST"})
     .then(function(r) { return r.json(); })
-    .then(function() {
-      var msgs = {start:"Started!", pause:"Paused", resume:"Resumed", stop:"Stopped"};
+    .then(function(d) {
+      if (d.ok === false && d.error) {
+        toast(d.error, "err");
+        return;
+      }
+      var msgs = {start:"▶ Started!", pause:"⏸ Paused", resume:"▶ Resumed", stop:"■ Stopped"};
       toast(msgs[action] || action);
     });
 }

@@ -128,8 +128,17 @@ async def process_account(account, playwright, custom_schedule=None):
             return False
 
         if not target_course:
-            state.log("🎉 All modules completed!", "success", email)
-            state.update(email, status="completed", status_label="✅ All Done!")
+            # Verify all modules are actually completed in Docebo
+            all_done = all(
+                next((c.get("status") == "completed" for c in courses_status if c["idCourse"] == course["id"]), False)
+                for course in COURSES if course["required"]
+            )
+            if all_done:
+                state.log("🎉 All modules completed!", "success", email)
+                state.update(email, status="completed", status_label="✅ All Done!")
+            else:
+                state.log("⚠️ No runnable module found — retrying in 1hr", "warning", email)
+                db.mark_module_failed(email, course_id)
             return True
 
         completed_les = target_current.get("competed_lessons", 0)
@@ -181,6 +190,16 @@ async def queue_worker(custom_schedule=None, single_email=None):
             status="queued", status_label="Ready")
         if db.enabled:
             db.init_progress(acc["email"], COURSES)
+
+    # Reset any stuck "running" modules back to pending on startup
+    if db.enabled:
+        try:
+            db._patch("account_progress",
+                "status=eq.running",
+                {"status": "pending", "next_run_at": db._now()})
+            state.log("♻️ Reset stuck running modules to pending", "info")
+        except Exception as e:
+            state.log(f"Reset error: {e}", "warning")
 
     if single_email:
         acc = next((a for a in ACCS if a["email"] == single_email), None)
