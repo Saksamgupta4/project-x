@@ -177,20 +177,33 @@ class BrowserManager:
             raise Exception(f"Login failed for {email}")
 
         print(f"  ✅ Login successful!")
-        # Capture localStorage token immediately (for Outlook/SSO accounts)
+        # Capture localStorage token (needed for Gmail/SSO accounts)
+        self._ls_token = None
         try:
+            # Try getting token directly first
             ls_raw = await page.evaluate(
                 "() => { try { return localStorage.getItem('access_token'); } catch(e) { return null; } }"
             )
+            if not ls_raw:
+                # Navigate to learn page to trigger Angular and set localStorage
+                try:
+                    await page.goto(f"{self.lms_url}/learn",
+                        wait_until="domcontentloaded", timeout=20000)
+                    await asyncio.sleep(3)
+                    ls_raw = await page.evaluate(
+                        "() => { try { return localStorage.getItem('access_token'); } catch(e) { return null; } }"
+                    )
+                except:
+                    pass
             if ls_raw:
                 import json as _j
                 obj = _j.loads(ls_raw)
                 self._ls_token = obj.get("access_token")
-                print(f"  ✅ Captured localStorage token")
+                print(f"  ✅ Captured localStorage token: {self._ls_token[:10]}...")
             else:
-                self._ls_token = None
-        except:
-            self._ls_token = None
+                print(f"  ⚠️ No localStorage token found")
+        except Exception as e:
+            print(f"  localStorage capture error: {e}")
 
         # Wait for hydra_access_token to be set (may take a moment)
         for wait_i in range(10):
