@@ -247,16 +247,17 @@ class BrowserManager:
         """
         import asyncio
         try:
-            # Navigate to LP page first to ensure session is active
-            lp_url = f"{self.lms_url}/learn/learning-plans/{self.lp_id}/{self.lp_slug}"
-            await page.goto(lp_url, wait_until="domcontentloaded", timeout=20000)
-            await asyncio.sleep(3)
-
-            print(f"  📍 LP page URL: {page.url}")
-            if "signin" in page.url or "login" in page.url:
-                self._last_api_debug = "Redirected to signin"
-                print(f"  ❌ Redirected! Current cookies: {[c['name'] for c in await page.context.cookies()]}")
-                return []
+            # Check current page - don't navigate if already on valid page
+            current_url = page.url
+            print(f"  📍 Current URL: {current_url}")
+            if "signin" in current_url or "login" in current_url:
+                # Try navigating to homepage first
+                await page.goto(f"{self.lms_url}/pages/49/homepage",
+                    wait_until="domcontentloaded", timeout=20000)
+                await asyncio.sleep(2)
+                if "signin" in page.url or "login" in page.url:
+                    self._last_api_debug = "Redirected to signin"
+                    return []
 
             # Get token - check cookies first, then localStorage
             cookies = await page.context.cookies()
