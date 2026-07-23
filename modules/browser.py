@@ -258,44 +258,29 @@ class BrowserManager:
                 print(f"  ❌ Redirected! Current cookies: {[c['name'] for c in await page.context.cookies()]}")
                 return []
 
-            # Get token from cookies
+            # Get token - check cookies first, then localStorage
             cookies = await page.context.cookies()
             token = next(
                 (c["value"] for c in cookies if c["name"] == "hydra_access_token"),
                 None
             )
 
-            # Use captured localStorage token for Outlook accounts
+            # Always check localStorage (works for Gmail/SSO accounts)
             if not token:
-                # First try injecting the saved token from login
-                if hasattr(self, '_ls_token') and self._ls_token:
-                    try:
-                        t = self._ls_token
-                        await page.evaluate(f"""
-                            () => {{
-                                localStorage.setItem('access_token', JSON.stringify({{
-                                    "access_token": "{t}",
-                                    "token_type": "bearer",
-                                    "scope": "api"
-                                }}));
-                            }}
-                        """)
-                        token = t
-                        print(f"  ✅ Injected saved localStorage token")
-                    except Exception as e:
-                        print(f"  Inject error: {e}")
+                try:
+                    ls_token = await page.evaluate(
+                        "() => { try { const r=localStorage.getItem('access_token'); return r?JSON.parse(r).access_token:null; } catch(e){return null;} }"
+                    )
+                    if ls_token:
+                        token = ls_token
+                        print(f"  ✅ Token from localStorage")
+                except:
+                    pass
 
-                # Direct localStorage check
-                if not token:
-                    try:
-                        ls_token = await page.evaluate(
-                            "() => { try { const r=localStorage.getItem('access_token'); return r?JSON.parse(r).access_token:null; } catch(e){return null;} }"
-                        )
-                        if ls_token:
-                            token = ls_token
-                            print(f"  ✅ Token from localStorage")
-                    except:
-                        pass
+            # If still no token, use saved _ls_token from login
+            if not token and hasattr(self, '_ls_token') and self._ls_token:
+                token = self._ls_token
+                print(f"  ✅ Using saved login token")
 
             api_url = f"{self.lms_url}/learn/v1/lp/{self.lp_id}?get_courses_instructors=1"
 
