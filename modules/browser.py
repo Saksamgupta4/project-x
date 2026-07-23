@@ -3,14 +3,22 @@ import json
 import os
 
 class BrowserManager:
-    def __init__(self, config: dict, proxy: dict, db=None):
+    def __init__(self, config: dict, proxy: dict, db=None, state=None, email=None):
         self.config          = config
         self.proxy           = proxy
+        self._state          = state
+        self._email          = email
         self.lms_url         = config["lms"]["url"]
         self.lp_id           = config["lms"]["learning_plan_id"]
         self.lp_slug         = config["lms"]["learning_plan_slug"]
         self._last_api_debug = ""
         self._db             = db  # Supabase DB instance
+
+    def _log(self, msg: str, level: str = "info"):
+        """Log to both print and state if available"""
+        print(f"  [browser] {msg}")
+        if self._state and self._email:
+            self._state.log(msg, level, self._email)
 
     def _cookie_file(self, email: str) -> str:
         safe = email.replace("@", "_").replace(".", "_")
@@ -176,11 +184,12 @@ class BrowserManager:
         if "login" in page.url and "pages" not in page.url and "learn" not in page.url:
             raise Exception(f"Login failed for {email}")
 
-        print(f"  ✅ Login successful! URL: {page.url}")
-        # Save cookies immediately after login
+        login_url = page.url
         cookies_after = await context.cookies(["https://inco.docebosaas.com"])
-        print(f"  🍪 Cookies after login: {[c['name'] for c in cookies_after]}")
-        # Capture localStorage token on current page (don't navigate away!)
+        cookie_names = [c['name'] for c in cookies_after]
+        self._log(f"✅ Login OK | URL: {login_url} | Cookies: {cookie_names}")
+
+        # Capture localStorage token on current page
         self._ls_token = None
         try:
             ls_raw = await page.evaluate(
@@ -190,11 +199,11 @@ class BrowserManager:
                 import json as _j
                 obj = _j.loads(ls_raw)
                 self._ls_token = obj.get("access_token")
-                print(f"  ✅ Captured localStorage token")
+                self._log(f"✅ localStorage token captured: {str(self._ls_token)[:15]}...")
             else:
-                print(f"  ℹ️ No localStorage token on login page (normal for cookie accounts)")
+                self._log("ℹ️ No localStorage token after login")
         except Exception as e:
-            print(f"  localStorage capture error: {e}")
+            self._log(f"localStorage error: {e}")
 
         # Wait for hydra_access_token to be set (may take a moment)
         for wait_i in range(10):
@@ -249,9 +258,8 @@ class BrowserManager:
         try:
             # Check current page - don't navigate if already on valid page
             current_url = page.url
-            print(f"  📍 Current URL: {current_url}")
+            self._log(f"📍 Page URL: {current_url} | ls_token: {bool(getattr(self,'_ls_token',None))}")
             if "signin" in current_url or "login" in current_url:
-                # Try navigating to homepage first
                 await page.goto(f"{self.lms_url}/pages/49/homepage",
                     wait_until="domcontentloaded", timeout=20000)
                 await asyncio.sleep(2)
