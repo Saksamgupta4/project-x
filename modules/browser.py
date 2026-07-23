@@ -176,7 +176,10 @@ class BrowserManager:
         if "login" in page.url and "pages" not in page.url and "learn" not in page.url:
             raise Exception(f"Login failed for {email}")
 
-        print(f"  ✅ Login successful!")
+        print(f"  ✅ Login successful! URL: {page.url}")
+        # Save cookies immediately after login
+        cookies_after = await context.cookies(["https://inco.docebosaas.com"])
+        print(f"  🍪 Cookies after login: {[c['name'] for c in cookies_after]}")
         # Capture localStorage token on current page (don't navigate away!)
         self._ls_token = None
         try:
@@ -249,8 +252,10 @@ class BrowserManager:
             await page.goto(lp_url, wait_until="domcontentloaded", timeout=20000)
             await asyncio.sleep(3)
 
+            print(f"  📍 LP page URL: {page.url}")
             if "signin" in page.url or "login" in page.url:
                 self._last_api_debug = "Redirected to signin"
+                print(f"  ❌ Redirected! Current cookies: {[c['name'] for c in await page.context.cookies()]}")
                 return []
 
             # Get token from cookies
