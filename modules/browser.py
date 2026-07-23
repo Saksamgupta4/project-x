@@ -12,10 +12,10 @@ class BrowserManager:
         self.lp_id           = config["lms"]["learning_plan_id"]
         self.lp_slug         = config["lms"]["learning_plan_slug"]
         self._last_api_debug = ""
-        self._db             = db  # Supabase DB instance
+        self._ls_token       = None
+        self._db             = db
 
     def _log(self, msg: str, level: str = "info"):
-        """Log to both print and state if available"""
         print(f"  [browser] {msg}")
         if self._state and self._email:
             self._state.log(msg, level, self._email)
@@ -25,26 +25,21 @@ class BrowserManager:
         return f"cookies_{safe}.json"
 
     def _save_cookies(self, email: str, cookies: list):
-        # Save to local file
         path = self._cookie_file(email)
         with open(path, "w") as f:
             json.dump(cookies, f, indent=2)
         names = [c["name"] for c in cookies]
         print(f"  💾 Saved {len(cookies)} cookies: {names}")
-        # Also save to Supabase if available
         if self._db and self._db.enabled:
             self._db.save_cookies(email, cookies)
-            print(f"  ☁️ Cookies synced to Supabase")
 
     def _load_cookies(self, email: str) -> list:
         raw = []
-        # Try Supabase first
         if self._db and self._db.enabled:
             sb_cookies = self._db.load_cookies(email)
             if sb_cookies:
                 print(f"  ☁️ Loaded {len(sb_cookies)} cookies from Supabase")
                 raw = sb_cookies
-        # Fallback to local file
         if not raw:
             path = self._cookie_file(email)
             if os.path.exists(path):
@@ -70,23 +65,6 @@ class BrowserManager:
             headless=True,
             args=["--no-sandbox", "--disable-dev-shm-usage"]
         )
-        # Build proxy config - use HTTP proxy (SOCKS5 auth not supported in Playwright)
-        proxy_cfg = None
-        if self.proxy and self.proxy.get("username"):
-            # Convert socks5 server to HTTP proxy
-            # NordVPN HTTP proxy: same host, port 80
-            socks_server = self.proxy.get("server", "")
-            # Extract hostname from socks5://hostname:port
-            host = socks_server.replace("socks5://", "").split(":")[0]
-            proxy_cfg = {
-                "server":   f"http://{host}:80",
-                "username": self.proxy.get("username", ""),
-                "password": self.proxy.get("password", "")
-            }
-            print(f"  🌐 Using HTTP proxy: {host}:80")
-        else:
-            print(f"  ⚠️ No proxy configured!")
-
         context = await browser.new_context(
             viewport={"width": 1280, "height": 800},
             user_agent=(
@@ -94,51 +72,59 @@ class BrowserManager:
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
-            ignore_https_errors=True,
-            proxy=proxy_cfg
+            ignore_https_errors=True
         )
         return context, browser
 
     async def login(self, context, email: str, password: str):
         page = await context.new_page()
 
-        # ── Try saved cookies ─────────────────────────────────────
+        # Try saved cookies first
         saved = self._load_cookies(email)
         if saved:
             print(f"  🍪 Trying {len(saved)} saved cookies")
             await context.add_cookies(saved)
             await page.goto(
                 f"{self.lms_url}/learn/learning-plans/{self.lp_id}/{self.lp_slug}",
-                wait_until="domcontentloaded", timeout=20000
+                wait_until="domcontentloaded", timeout=45000
             )
             await asyncio.sleep(3)
             if "signin" not in page.url and "login" not in page.url:
                 print(f"  ✅ Cookie login works!")
+                # Capture localStorage token
+                try:
+                    ls_raw = await page.evaluate(
+                        "() => { try { const r=localStorage.getItem('access_token'); return r?JSON.parse(r).access_token:null; } catch(e){return null;} }"
+                    )
+                    if ls_raw:
+                        self._ls_token = ls_raw
+                        self._log(f"✅ localStorage token from cookies: {ls_raw[:10]}...")
+                except:
+                    pass
                 return page
             print(f"  ⚠️ Cookies invalid — fresh login")
             await context.clear_cookies()
 
-        # ── Accept cookies banner first ───────────────────────────
+        # Fresh login
         print(f"  🔑 Logging in: {email}")
-        await page.goto(f"{self.lms_url}/login", wait_until="domcontentloaded", timeout=20000)
+        await page.goto(f"{self.lms_url}/login", wait_until="domcontentloaded", timeout=45000)
         await asyncio.sleep(2)
 
-        # Accept cookie banner if present
+        # Accept cookie banner
         try:
             accept = await page.wait_for_selector("button:has-text('ACCEPT')", timeout=3000)
             if accept:
                 await accept.click()
                 await asyncio.sleep(1)
-                print(f"  ✅ Accepted cookie banner")
         except:
             pass
 
-        # ── Fill Username field (NOT email type!) ─────────────────
+        # Fill username
         username_selectors = [
-            "input[placeholder*='sername']",  # Username placeholder
+            "input[placeholder*='sername']",
             "input[name='login[username]']",
             "input[name='username']",
-            "input[type='text']:not([name*='search'])",  # First text input
+            "input[type='text']:not([name*='search'])",
             "input[name='login[email]']",
             "input[type='email']",
         ]
@@ -151,10 +137,10 @@ class BrowserManager:
                     filled = True
                     print(f"  ✅ Username filled: {sel}")
                     break
-            except: continue
+            except:
+                continue
 
         if not filled:
-            # Last resort — fill first visible input
             try:
                 await page.evaluate(f"""
                     const inputs = document.querySelectorAll('input');
@@ -173,7 +159,7 @@ class BrowserManager:
 
         await asyncio.sleep(0.5)
 
-        # ── Fill Password ─────────────────────────────────────────
+        # Fill password
         try:
             await page.fill("input[type='password']", password)
             print(f"  ✅ Password filled")
@@ -182,7 +168,7 @@ class BrowserManager:
 
         await asyncio.sleep(0.5)
 
-        # ── Click SIGN IN ─────────────────────────────────────────
+        # Click submit
         try:
             await page.click("button:has-text('SIGN IN')")
             print(f"  ✅ Clicked SIGN IN")
@@ -192,107 +178,59 @@ class BrowserManager:
                     await page.click(sel)
                     print(f"  ✅ Clicked submit: {sel}")
                     break
-                except: continue
+                except:
+                    continue
 
-        await page.wait_for_load_state("networkidle", timeout=20000)
+        await page.wait_for_load_state("networkidle", timeout=45000)
         await asyncio.sleep(3)
 
-        print(f"  After login URL: {page.url}")
+        self._log(f"After login URL: {page.url}")
 
         if "login" in page.url and "pages" not in page.url and "learn" not in page.url:
             raise Exception(f"Login failed for {email}")
 
-        login_url = page.url
-        cookies_after = await context.cookies(["https://inco.docebosaas.com"])
-        cookie_names = [c['name'] for c in cookies_after]
-        self._log(f"✅ Login OK | URL: {login_url} | Cookies: {cookie_names}")
-
-        # Capture localStorage token on current page
+        # Capture localStorage token immediately after login
         self._ls_token = None
         try:
             ls_raw = await page.evaluate(
-                "() => { try { return localStorage.getItem('access_token'); } catch(e) { return null; } }"
+                "() => { try { const r=localStorage.getItem('access_token'); return r?JSON.parse(r).access_token:null; } catch(e){return null;} }"
             )
             if ls_raw:
-                import json as _j
-                obj = _j.loads(ls_raw)
-                self._ls_token = obj.get("access_token")
-                self._log(f"✅ localStorage token captured: {str(self._ls_token)[:15]}...")
+                self._ls_token = ls_raw
+                self._log(f"✅ localStorage token captured: {ls_raw[:10]}...")
             else:
                 self._log("ℹ️ No localStorage token after login")
         except Exception as e:
             self._log(f"localStorage error: {e}")
 
-        # Wait for hydra_access_token to be set (may take a moment)
-        for wait_i in range(10):
-            all_cookies = await context.cookies()
-            token_found = any(c["name"] == "hydra_access_token" for c in all_cookies)
-            if token_found:
-                break
-            print(f"  ⏳ Waiting for hydra token... ({wait_i+1}/10)")
-            await asyncio.sleep(2)
-        else:
-            # Token not found - log cookie names for debugging
-            all_cookies = await context.cookies()
-            names = [c["name"] for c in all_cookies][:10]
-            print(f"  ⚠️ hydra_access_token not found! Cookies: {names}")
-            # Try navigating to LP page to trigger token
-            try:
-                await page.goto(
-                    f"{self.lms_url}/learn/learning-plans/{self.lp_id}/{self.lp_slug}",
-                    wait_until="domcontentloaded", timeout=20000
-                )
-                await asyncio.sleep(5)
-            except:
-                pass
-
         # Save cookies
         cookies = await context.cookies(["https://inco.docebosaas.com"])
         self._save_cookies(email, cookies)
 
-        # Also save localStorage token if present (for Outlook/SSO accounts)
-        try:
-            ls_token = await page.evaluate("""
-                () => {
-                    try {
-                        return localStorage.getItem('access_token');
-                    } catch(e) { return null; }
-                }
-            """)
-            if ls_token and self._db and self._db.enabled:
-                self._db.save_cookies(email + "_ls", [{"name": "access_token", "value": ls_token}])
-                print(f"  ✅ localStorage token saved to Supabase")
-        except Exception as e:
-            print(f"  localStorage save error: {e}")
-
+        self._log(f"✅ Login successful! Cookies: {[c['name'] for c in cookies]}")
         return page
 
     async def get_course_statuses(self, page) -> list:
-        """
-        Get course statuses using Playwright request API (more reliable than fetch).
-        Uses cookies from the browser context automatically.
-        """
-        import asyncio
         try:
-            # Check current page - don't navigate if already on valid page
-            current_url = page.url
-            self._log(f"📍 Page URL: {current_url} | ls_token: {bool(getattr(self,'_ls_token',None))}")
-            if "signin" in current_url or "login" in current_url:
-                await page.goto(f"{self.lms_url}/pages/49/homepage",
-                    wait_until="domcontentloaded", timeout=20000)
-                await asyncio.sleep(2)
-                if "signin" in page.url or "login" in page.url:
-                    self._last_api_debug = "Redirected to signin"
-                    return []
+            # Navigate to LP page
+            lp_url = f"{self.lms_url}/learn/learning-plans/{self.lp_id}/{self.lp_slug}"
+            await page.goto(lp_url, wait_until="domcontentloaded", timeout=45000)
+            await asyncio.sleep(3)
 
-            # Get token - check cookies first, then localStorage
+            self._log(f"LP page URL: {page.url}")
+
+            if "signin" in page.url or "login" in page.url:
+                self._last_api_debug = "Redirected to signin"
+                return []
+
+            # Get token - cookies first
             cookies = await page.context.cookies()
             token = next(
                 (c["value"] for c in cookies if c["name"] == "hydra_access_token"),
                 None
             )
 
-            # Always check localStorage (works for Gmail/SSO accounts)
+            # Then localStorage
             if not token:
                 try:
                     ls_token = await page.evaluate(
@@ -300,58 +238,43 @@ class BrowserManager:
                     )
                     if ls_token:
                         token = ls_token
-                        print(f"  ✅ Token from localStorage")
+                        self._log(f"✅ Token from localStorage")
                 except:
                     pass
 
-            # If still no token, use saved _ls_token from login
-            if not token and hasattr(self, '_ls_token') and self._ls_token:
+            # Then saved _ls_token from login
+            if not token and self._ls_token:
                 token = self._ls_token
-                print(f"  ✅ Using saved login token")
+                self._log(f"✅ Using saved login token")
+
+            self._log(f"Token: {'yes ' + token[:10] if token else 'NONE'}")
 
             api_url = f"{self.lms_url}/learn/v1/lp/{self.lp_id}?get_courses_instructors=1"
-
             headers = {"Accept": "application/json"}
             if token:
                 headers["Authorization"] = f"Bearer {token}"
-
-            # Debug: log what token we have
-            print(f"  Token type: {'cookie' if next((c for c in cookies if c['name']=='hydra_access_token'),None) else 'localStorage' if token else 'NONE'}")
-            print(f"  Token value: {token[:20] if token else 'NONE'}...")
 
             response = await page.context.request.get(api_url, headers=headers)
             token_src = "cookie" if next((c for c in cookies if c["name"] == "hydra_access_token"), None) else "localStorage" if token else "none"
             self._last_api_debug = f"HTTP:{response.status} token={token_src}"
 
             if response.status == 403:
-                # Token expired — re-navigate to LP to refresh session
                 self._last_api_debug += f" body:{(await response.text())[:200]}"
+                # Retry once
                 await asyncio.sleep(3)
-                await page.goto(
-                    f"{self.lms_url}/learn/learning-plans/{self.lp_id}/{self.lp_slug}",
-                    wait_until="domcontentloaded", timeout=20000
-                )
-                await asyncio.sleep(5)
-                # Refresh cookies and retry once - also check localStorage
                 cookies = await page.context.cookies()
                 token = next((c["value"] for c in cookies if c["name"] == "hydra_access_token"), None)
                 if not token:
                     try:
-                        ls_raw = await page.evaluate("""
-                            () => {
-                                try {
-                                    const raw = localStorage.getItem('access_token');
-                                    if (!raw) return null;
-                                    const obj = JSON.parse(raw);
-                                    return obj.access_token || null;
-                                } catch(e) { return null; }
-                            }
-                        """)
+                        ls_raw = await page.evaluate(
+                            "() => { try { const r=localStorage.getItem('access_token'); return r?JSON.parse(r).access_token:null; } catch(e){return null;} }"
+                        )
                         if ls_raw:
                             token = ls_raw
-                            print("  ✅ Retry: token from localStorage")
                     except:
                         pass
+                if not token and self._ls_token:
+                    token = self._ls_token
                 if token:
                     headers["Authorization"] = f"Bearer {token}"
                 response = await page.context.request.get(api_url, headers=headers)
@@ -369,81 +292,6 @@ class BrowserManager:
         except Exception as e:
             self._last_api_debug = f"Exception: {str(e)[:100]}"
             return []
-
-
-    async def _ensure_enrolled(self, page):
-        """Auto-enroll in LP using API if hydra token missing"""
-        try:
-            cookies = await page.context.cookies()
-            token = next((c["value"] for c in cookies if c["name"] == "hydra_access_token"), None)
-            if token:
-                return  # Already have token
-
-            print(f"  No hydra token — attempting enrollment via API...")
-
-            # Get CSRF token from cookies
-            csrf = next((c["value"] for c in cookies if c["name"] == "_csrf"), None)
-
-            # Try enrollment API
-            enroll_url = f"{self.lms_url}/learn/v1/lp/{self.lp_id}/enroll"
-            headers = {"Content-Type": "application/json", "Accept": "application/json"}
-            if csrf:
-                headers["X-CSRF-Token"] = csrf
-
-            try:
-                resp = await page.context.request.post(enroll_url, headers=headers)
-                print(f"  Enroll API: {resp.status}")
-                await asyncio.sleep(2)
-            except Exception as e:
-                print(f"  Enroll API error: {e}")
-
-            # Navigate to LP page to get token after enrollment
-            lp_url = f"{self.lms_url}/learn/learning-plans/{self.lp_id}/{self.lp_slug}"
-            await page.goto(lp_url, wait_until="domcontentloaded", timeout=20000)
-            await asyncio.sleep(5)
-
-            # Wait for hydra token
-            for i in range(15):
-                cookies = await page.context.cookies()
-                token = next((c["value"] for c in cookies if c["name"] == "hydra_access_token"), None)
-                if token:
-                    print(f"  Token obtained after enrollment!")
-                    return
-                await asyncio.sleep(2)
-
-            # Last resort - click play/start button on page
-            await page.evaluate("""
-                () => {
-                    const selectors = [
-                        '[class*="play-btn"]', '[class*="lp-play"]',
-                        '[class*="start-btn"]', 'button[class*="play"]',
-                        '[data-id="play-button"]', '[class*="card"] button',
-                        'dcb-play-button button', '[class*="player-button"]'
-                    ];
-                    for (const sel of selectors) {
-                        const el = document.querySelector(sel);
-                        if (el) { el.click(); return sel; }
-                    }
-                    // Click first visible button
-                    const btns = [...document.querySelectorAll('button')];
-                    const playBtn = btns.find(b => {
-                        const t = (b.innerText||b.title||'').toLowerCase();
-                        return t.includes('play') || t.includes('start') || t.includes('begin');
-                    });
-                    if (playBtn) { playBtn.click(); return 'text-match'; }
-                    return null;
-                }
-            """)
-            await asyncio.sleep(5)
-
-            cookies = await page.context.cookies()
-            token = next((c["value"] for c in cookies if c["name"] == "hydra_access_token"), None)
-            if token:
-                print(f"  Token obtained after button click!")
-            else:
-                print(f"  ⚠️ Still no token — account needs manual LP enrollment")
-        except Exception as e:
-            print(f"  Enroll error: {e}")
 
     def get_module_url(self, course_id: int, slug: str) -> str:
         return (
