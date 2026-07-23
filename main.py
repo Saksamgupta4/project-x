@@ -30,6 +30,11 @@ def load_config():
     return cfg
 
 CONFIG      = load_config()
+# Inject NordVPN credentials into proxy config
+if os.environ.get("NORDVPN_USER"):
+    CONFIG["proxy"]["username"] = os.environ["NORDVPN_USER"]
+if os.environ.get("NORDVPN_PASS"):
+    CONFIG["proxy"]["password"] = os.environ["NORDVPN_PASS"]
 COURSES     = CONFIG["courses"]
 SIM         = CONFIG["simulation"]
 TEST_MODE   = CONFIG.get("test_mode", {})
