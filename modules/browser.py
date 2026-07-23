@@ -70,15 +70,20 @@ class BrowserManager:
             headless=True,
             args=["--no-sandbox", "--disable-dev-shm-usage"]
         )
-        # Build proxy config for context
+        # Build proxy config - use HTTP proxy (SOCKS5 auth not supported in Playwright)
         proxy_cfg = None
-        if self.proxy and self.proxy.get("server"):
+        if self.proxy and self.proxy.get("username"):
+            # Convert socks5 server to HTTP proxy
+            # NordVPN HTTP proxy: same host, port 80
+            socks_server = self.proxy.get("server", "")
+            # Extract hostname from socks5://hostname:port
+            host = socks_server.replace("socks5://", "").split(":")[0]
             proxy_cfg = {
-                "server":   self.proxy["server"],
+                "server":   f"http://{host}:80",
                 "username": self.proxy.get("username", ""),
                 "password": self.proxy.get("password", "")
             }
-            print(f"  🌐 Using proxy: {self.proxy['server']}")
+            print(f"  🌐 Using HTTP proxy: {host}:80")
         else:
             print(f"  ⚠️ No proxy configured!")
 
