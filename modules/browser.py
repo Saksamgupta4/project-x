@@ -105,10 +105,16 @@ class BrowserManager:
             print(f"  ⚠️ Cookies invalid — fresh login")
             await context.clear_cookies()
 
-        # Fresh login
+        # Fresh login - try both login URLs
         print(f"  🔑 Logging in: {email}")
-        await page.goto(f"{self.lms_url}/login", wait_until="domcontentloaded", timeout=45000)
-        await asyncio.sleep(2)
+        # Try /learn/signin first (new URL), fallback to /login
+        await page.goto(f"{self.lms_url}/learn/signin", wait_until="domcontentloaded", timeout=45000)
+        await asyncio.sleep(3)
+        # If no form found, try old URL
+        inputs = await page.query_selector_all("input")
+        if not inputs:
+            await page.goto(f"{self.lms_url}/login", wait_until="domcontentloaded", timeout=45000)
+            await asyncio.sleep(3)
 
         # Accept cookie banner
         try:
@@ -186,7 +192,7 @@ class BrowserManager:
 
         self._log(f"After login URL: {page.url}")
 
-        if "login" in page.url and "pages" not in page.url and "learn" not in page.url:
+        if "signin" in page.url or ("login" in page.url and "pages" not in page.url and "learn" not in page.url):
             raise Exception(f"Login failed for {email}")
 
         # Capture localStorage token immediately after login
