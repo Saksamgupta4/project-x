@@ -90,7 +90,7 @@ async def process_account(account, playwright, custom_schedule=None):
 
     proxy_mgr   = ProxyManager(CONFIG)
     proxy       = proxy_mgr.get_proxy(country)
-    browser_mgr = BrowserManager(CONFIG, proxy, db=db)
+    browser_mgr = BrowserManager(CONFIG, proxy, db=db, state=state, email=email)
     context, browser = None, None
 
     try:
