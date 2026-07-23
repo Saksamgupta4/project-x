@@ -82,7 +82,7 @@ class BrowserManager:
             print(f"  🍪 Trying {len(saved)} saved cookies")
             await context.add_cookies(saved)
             await page.goto(
-                f"{self.lms_url}/learn/lp/{self.lp_id}/{self.lp_slug}",
+                f"{self.lms_url}/learn/learning-plans/{self.lp_id}/{self.lp_slug}",
                 wait_until="domcontentloaded", timeout=20000
             )
             await asyncio.sleep(3)
@@ -177,31 +177,19 @@ class BrowserManager:
             raise Exception(f"Login failed for {email}")
 
         print(f"  ✅ Login successful!")
-        # Capture localStorage token (needed for Gmail/SSO accounts)
+        # Capture localStorage token on current page (don't navigate away!)
         self._ls_token = None
         try:
-            # Try getting token directly first
             ls_raw = await page.evaluate(
                 "() => { try { return localStorage.getItem('access_token'); } catch(e) { return null; } }"
             )
-            if not ls_raw:
-                # Navigate to learn page to trigger Angular and set localStorage
-                try:
-                    await page.goto(f"{self.lms_url}/learn",
-                        wait_until="domcontentloaded", timeout=20000)
-                    await asyncio.sleep(3)
-                    ls_raw = await page.evaluate(
-                        "() => { try { return localStorage.getItem('access_token'); } catch(e) { return null; } }"
-                    )
-                except:
-                    pass
             if ls_raw:
                 import json as _j
                 obj = _j.loads(ls_raw)
                 self._ls_token = obj.get("access_token")
-                print(f"  ✅ Captured localStorage token: {self._ls_token[:10]}...")
+                print(f"  ✅ Captured localStorage token")
             else:
-                print(f"  ⚠️ No localStorage token found")
+                print(f"  ℹ️ No localStorage token on login page (normal for cookie accounts)")
         except Exception as e:
             print(f"  localStorage capture error: {e}")
 
