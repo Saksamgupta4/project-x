@@ -70,6 +70,18 @@ class BrowserManager:
             headless=True,
             args=["--no-sandbox", "--disable-dev-shm-usage"]
         )
+        # Build proxy config for context
+        proxy_cfg = None
+        if self.proxy and self.proxy.get("server"):
+            proxy_cfg = {
+                "server":   self.proxy["server"],
+                "username": self.proxy.get("username", ""),
+                "password": self.proxy.get("password", "")
+            }
+            print(f"  🌐 Using proxy: {self.proxy['server']}")
+        else:
+            print(f"  ⚠️ No proxy configured!")
+
         context = await browser.new_context(
             viewport={"width": 1280, "height": 800},
             user_agent=(
@@ -77,7 +89,8 @@ class BrowserManager:
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
-            ignore_https_errors=True
+            ignore_https_errors=True,
+            proxy=proxy_cfg
         )
         return context, browser
 
