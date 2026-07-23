@@ -83,7 +83,7 @@ class BrowserManager:
             await context.add_cookies(saved)
             await page.goto(
                 f"{self.lms_url}/learn/lp/{self.lp_id}/{self.lp_slug}",
-                wait_until="domcontentloaded", timeout=45000
+                wait_until="domcontentloaded", timeout=20000
             )
             await asyncio.sleep(3)
             if "signin" not in page.url and "login" not in page.url:
@@ -94,7 +94,7 @@ class BrowserManager:
 
         # ── Accept cookies banner first ───────────────────────────
         print(f"  🔑 Logging in: {email}")
-        await page.goto(f"{self.lms_url}/login", wait_until="domcontentloaded", timeout=45000)
+        await page.goto(f"{self.lms_url}/login", wait_until="domcontentloaded", timeout=20000)
         await asyncio.sleep(2)
 
         # Accept cookie banner if present
@@ -168,7 +168,7 @@ class BrowserManager:
                     break
                 except: continue
 
-        await page.wait_for_load_state("networkidle", timeout=45000)
+        await page.wait_for_load_state("networkidle", timeout=20000)
         await asyncio.sleep(3)
 
         print(f"  After login URL: {page.url}")
@@ -209,7 +209,7 @@ class BrowserManager:
             try:
                 await page.goto(
                     f"{self.lms_url}/learn/learning-plans/{self.lp_id}/{self.lp_slug}",
-                    wait_until="domcontentloaded", timeout=45000
+                    wait_until="domcontentloaded", timeout=20000
                 )
                 await asyncio.sleep(5)
             except:
@@ -245,7 +245,7 @@ class BrowserManager:
         try:
             # Navigate to LP page first to ensure session is active
             lp_url = f"{self.lms_url}/learn/learning-plans/{self.lp_id}/{self.lp_slug}"
-            await page.goto(lp_url, wait_until="domcontentloaded", timeout=45000)
+            await page.goto(lp_url, wait_until="domcontentloaded", timeout=20000)
             await asyncio.sleep(3)
 
             if "signin" in page.url or "login" in page.url:
@@ -311,7 +311,7 @@ class BrowserManager:
                 await asyncio.sleep(3)
                 await page.goto(
                     f"{self.lms_url}/learn/learning-plans/{self.lp_id}/{self.lp_slug}",
-                    wait_until="domcontentloaded", timeout=45000
+                    wait_until="domcontentloaded", timeout=20000
                 )
                 await asyncio.sleep(5)
                 # Refresh cookies and retry once - also check localStorage
@@ -381,7 +381,7 @@ class BrowserManager:
 
             # Navigate to LP page to get token after enrollment
             lp_url = f"{self.lms_url}/learn/learning-plans/{self.lp_id}/{self.lp_slug}"
-            await page.goto(lp_url, wait_until="domcontentloaded", timeout=45000)
+            await page.goto(lp_url, wait_until="domcontentloaded", timeout=20000)
             await asyncio.sleep(5)
 
             # Wait for hydra token
